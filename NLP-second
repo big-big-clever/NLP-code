@@ -1,0 +1,197 @@
+import os
+import jieba
+import numpy as np
+import matplotlib.pyplot as plt
+import re
+import random
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from charset_normalizer import from_path
+
+
+# 清洗文本，只保留中文字符
+def clean_text(text):
+    return re.sub(r"[^\u4e00-\u9fff]", "", text)
+
+
+# 重新编码文件为 GBK 格式
+def convert_to_gbk(data_dir, output_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    for filename in os.listdir(data_dir):
+        if filename.endswith(".txt"):
+            file_path = os.path.join(data_dir, filename)
+            output_path = os.path.join(output_dir, filename)
+            try:
+                # 使用 charset-normalizer 检测编码并读取文件
+                result = from_path(file_path).best()
+                if result:
+                    content = str(result)  # 使用 str() 方法提取文本内容
+                else:
+                    print(f"无法检测文件 {filename} 的编码，尝试使用默认编码读取。")
+                    with open(file_path, "r", encoding="gbk", errors="ignore") as f:
+                        content = f.read()
+                # 将内容重新编码为 GBK 并保存，忽略无法编码的字符
+                with open(output_path, "w", encoding="gbk", errors="ignore") as f:
+                    f.write(content)
+                print(f"文件 {filename} 已重新编码为 GBK 并保存到 {output_dir}。")
+            except Exception as e:
+                print(f"文件 {filename} 重新编码失败: {e}")
+
+
+# 1. 数据加载
+def load_data(data_dir, num_paragraphs=1000, min_length=20):
+    texts = []
+    labels = []
+    skipped_files = []  # 记录无法解码的文件
+    for filename in os.listdir(data_dir):
+        if filename.endswith(".txt"):
+            label = filename.split(".")[0]  # 文件名作为标签
+            file_path = os.path.join(data_dir, filename)
+            try:
+                with open(file_path, "r", encoding="gbk", errors="ignore") as f:
+                    content = f.read()
+                    paragraphs = content.split("\n")  # 按段落分割
+                    # 过滤掉空文本或只包含空白字符的文本，并清洗文本
+                    paragraphs = [clean_text(p.strip()) for p in paragraphs if p.strip()]
+                    # 过滤掉长度小于 min_length 的段落
+                    paragraphs = [p for p in paragraphs if len(p) >= min_length]
+                    texts.extend(paragraphs)
+                    labels.extend([label] * len(paragraphs))
+            except Exception as e:
+                print(f"Skipping file {filename} due to decoding error: {e}")
+                skipped_files.append(filename)
+
+    # 均匀选取 num_paragraphs 个段落
+    if len(texts) > num_paragraphs:
+        indices = random.sample(range(len(texts)), num_paragraphs)  # 随机采样
+        texts = [texts[i] for i in indices]
+        labels = [labels[i] for i in indices]
+
+    # 检查文本内容
+    print(f"Loaded {len(texts)} paragraphs.")
+    if texts:  # 检查 texts 是否为空
+        print("Sample text:", texts[0])  # 打印第一个段落
+    print(f"Skipped files: {skipped_files}")  # 打印无法解码的文件
+    return texts, labels
+
+
+# 2. 文本预处理
+def preprocess(texts, unit="word", first_call=True):
+    if unit == "word":
+        processed_texts = [" ".join(jieba.lcut(text)) for text in texts]  # 分词
+        if first_call:
+            print("Sample processed text (word):", processed_texts[0])  # 只在第一次调用时打印
+        return processed_texts
+    elif unit == "char":
+        processed_texts = [" ".join(list(text)) for text in texts]  # 分字
+        if first_call:
+            print("Sample processed text (char):", processed_texts[0])  # 只在第一次调用时打印
+        return processed_texts
+    else:
+        raise ValueError("unit must be 'word' or 'char'")
+
+
+# 3. LDA 建模
+def lda_model(texts, n_topics):
+    vectorizer = CountVectorizer(token_pattern=r"(?u)\b\w+\b")  # 允许处理中文字符
+    X = vectorizer.fit_transform(texts)
+    if len(vectorizer.vocabulary_) == 0:
+        raise ValueError("Vocabulary is empty. Check if texts contain valid words.")
+    lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+    lda.fit(X)
+    return lda.transform(X)  # 返回主题分布
+
+
+# 4. 分类任务
+def classify(X, y, classifier):
+    kf = KFold(n_splits=10, shuffle=True, random_state=42)
+    accuracies = []
+    y = np.array(y)  # 将 y 转换为 NumPy 数组
+    for train_index, test_index in kf.split(X):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]  # 现在 y 是 NumPy 数组，可以直接索引
+        classifier.fit(X_train, y_train)
+        y_pred = classifier.predict(X_test)
+        accuracies.append(accuracy_score(y_test, y_pred))
+    return np.mean(accuracies)
+
+
+# 5. 实验：主题数量 T 的影响
+def experiment_topic_num(texts, labels, unit="word", K=500):
+    n_topics_list = [5, 10, 20, 50, 100]
+    accuracies = []
+    for n_topics in n_topics_list:
+        processed_texts = preprocess(texts, unit, first_call=(n_topics == n_topics_list[0]))  # 只在第一次调用时打印
+        X = lda_model(processed_texts, n_topics)
+        accuracy = classify(X, labels, LogisticRegression())
+        accuracies.append(accuracy)
+    plt.plot(n_topics_list, accuracies, marker="o")
+    plt.xlabel("Number of Topics (T)")
+    plt.ylabel("Accuracy")
+    plt.title(f"Impact of Topic Number (Unit: {unit}, K={K})")
+    plt.show()
+
+
+# 6. 实验：基本单元（词 vs. 字）的影响
+def experiment_unit(texts, labels, K=500):
+    units = ["word", "char"]
+    accuracies = []
+    for i, unit in enumerate(units):
+        processed_texts = preprocess(texts, unit, first_call=(i == 0))  # 只在第一次调用时打印
+        X = lda_model(processed_texts, n_topics=20)
+        accuracy = classify(X, labels, LogisticRegression())
+        accuracies.append(accuracy)
+    plt.bar(units, accuracies)
+    plt.xlabel("Unit")
+    plt.ylabel("Accuracy")
+    plt.title(f"Impact of Unit (K={K})")
+    plt.show()
+
+
+# 7. 实验：段落长度 K 的影响
+def experiment_paragraph_length(texts, labels, unit="word"):
+    K_list = [20, 100, 500, 1000, 3000]
+    accuracies = []
+    for i, K in enumerate(K_list):
+        sampled_texts = [text[:K] for text in texts]  # 截取前 K 个字符D
+        processed_texts = preprocess(sampled_texts, unit, first_call=(i == 0))  # 只在第一次调用时打印
+        X = lda_model(processed_texts, n_topics=20)
+        accuracy = classify(X, labels, LogisticRegression())
+        accuracies.append(accuracy)
+    plt.plot(K_list, accuracies, marker="o")
+    plt.xlabel("Paragraph Length (K)")
+    plt.ylabel("Accuracy")
+    plt.title(f"Impact of Paragraph Length (Unit: {unit})")
+    plt.show()
+
+
+# 主函数
+def main(data_dir, output_dir):
+    # 将所有文件重新编码为 GBK 格式并保存到 output_dir
+    convert_to_gbk(data_dir, output_dir)
+
+    # 从重新编码的文件中加载数据并均匀选取 1000 个段落，每个段落长度不低于 20 个字
+    texts, labels = load_data(output_dir, num_paragraphs=1000, min_length=20)
+
+    # 实验 1：主题数量 T 的影响
+    experiment_topic_num(texts, labels, unit="word", K=500)
+
+    # 实验 2：基本单元（词 vs. 字）的影响
+    experiment_unit(texts, labels, K=500)
+
+    # 实验 3：段落长度 K 的影响
+    experiment_paragraph_length(texts, labels, unit="word")
+
+
+# 运行
+if __name__ == "__main__":
+    data_dir = r"D:\Users\Administrator\PycharmProjects\PythonProject3\NLPData"  # 替换为你的原始数据集路径
+    output_dir = r"D:\Users\Administrator\PycharmProjects\PythonProject3\output"  # 替换为重新编码后的文件保存路径
+    main(data_dir, output_dir)
