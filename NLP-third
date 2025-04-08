@@ -1,0 +1,194 @@
+import re
+import jieba
+import numpy as np
+from pathlib import Path
+from gensim.models import Word2Vec, KeyedVectors
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+from adjustText import adjust_text
+
+# 配置中文显示
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
+
+
+class StableJinYongAnalyzer:
+    def __init__(self, book_path):
+        self.book_path = Path(book_path)
+        self.model = None
+        # 根据《天龙八部》更新关键词集合
+        self.keywords = {
+            "段誉", "乔峰", "虚竹", "天山六阳掌", "降龙十八掌",
+            "无崖子", "大理段家", "西夏国", "丐帮", "少林寺", "逍遥派", "凌波微步"
+        }
+
+    def _protect_keywords(self, text):
+        """强力保护关键词语不被拆分"""
+        protected = text
+        for word in self.keywords:
+            protected = protected.replace(word, f"※{word}※")
+        return protected
+
+    def preprocess(self):
+        """终极预处理流程"""
+        # 检查词典文件
+        dict_path = Path('jinyong_dict.txt')
+        if not dict_path.exists():
+            raise FileNotFoundError(f"词典文件 {dict_path} 不存在")
+
+        # 加载词典
+        jieba.load_userdict(str(dict_path.absolute()))
+        for word in self.keywords:
+            jieba.suggest_freq(word, tune=True)
+
+        # 读取并保护关键词语
+        try:
+            text = self.book_path.read_text(encoding='gb18030')
+        except UnicodeDecodeError:
+            text = self.book_path.read_text(encoding='utf-8', errors='ignore')
+
+        protected_text = self._protect_keywords(text)
+
+        # 分段处理
+        paragraphs = []
+        for para in re.split(r'[\n\r]+', protected_text):
+            if 50 < len(para) < 1000:  # 保留合适长度的段落
+                words = [
+                    token.replace('※', '')
+                    for token in jieba.lcut(para)
+                    if len(token.replace('※', '')) > 1
+                ]
+                if words:  # 过滤空段落
+                    paragraphs.append(words)
+        return paragraphs
+
+    def train_model(self):
+        """稳定训练方案（兼容Gensim 4.x）"""
+        sentences = self.preprocess()
+
+        # 训练模型
+        self.model = Word2Vec(
+            sentences,
+            vector_size=200,
+            window=10,
+            min_count=2,
+            sample=1e-5,
+            alpha=0.025,
+            min_alpha=0.0001,
+            negative=15,
+            hs=1,
+            epochs=50,
+            compute_loss=True
+        )
+
+        # === 安全向量归一化 ===
+        vectors = self.model.wv
+        new_vectors = KeyedVectors(vector_size=vectors.vector_size)
+
+        # 批量归一化（提高效率）
+        normalized = vectors.vectors / (np.linalg.norm(vectors.vectors, axis=1, keepdims=True) + 1e-8)
+        new_vectors.add_vectors(keys=vectors.index_to_key, weights=normalized)
+
+        self.model.wv = new_vectors  # 替换为归一化后的向量
+
+    def perfect_visualization(self, words):
+        """完美可视化方案"""
+        valid_words = [w for w in words if w in self.model.wv]
+        if not valid_words:
+            print("无有效词语可展示")
+            return
+
+        vectors = np.array([self.model.wv[w] for w in valid_words])
+
+        # 动态参数调整
+        perplexity =min(30, len(valid_words) // 3)  # 调整 perplexity
+        learning_rate = 150  # 提高学习率
+        early_exaggeration = 20  # 增加 early_exaggeration
+
+        # t-SNE降维
+        tsne = TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            early_exaggeration=early_exaggeration,
+            learning_rate=learning_rate,
+            max_iter=1000,  # 使用 max_iter 替代 n_iter
+            init='pca',
+            random_state=42
+        )
+        points = tsne.fit_transform(vectors)
+
+        # 智能坐标范围
+        x_min, x_max = np.percentile(points[:, 0], [5, 95])
+        y_min, y_max = np.percentile(points[:, 1], [5, 95])
+        x_pad = max(10, (x_max - x_min) * 0.25)  # 更紧凑的 padding
+        y_pad = max(10, (y_max - y_min) * 0.25)  # 更紧凑的 padding
+
+        # 绘图
+        plt.figure(figsize=(12, 10), dpi=80)  # 适应屏幕的尺寸和清晰度
+        scatter = plt.scatter(
+            points[:, 0], points[:, 1],
+            s=120,
+            alpha=0.7,
+            edgecolors='w',
+            linewidths=0.5,
+            c=np.arange(len(valid_words)),  # 使用不同颜色
+            cmap='tab20'
+        )
+
+        # 高级标注
+        texts = []
+        for i, word in enumerate(valid_words):
+            texts.append(plt.text(
+                points[i, 0], points[i, 1], word,
+                fontsize=12,  # 调整字体大小
+                ha='center',
+                va='center',
+                bbox=dict(
+                    boxstyle='round,pad=0.3',
+                    fc='white',
+                    alpha=0.8,
+                    ec='none'
+                )
+            ))
+
+        adjust_text(
+            texts,
+            expand_points=(1.3, 1.3),  # 增加扩展范围
+            expand_text=(1.2, 1.2),
+            arrowprops=dict(
+                arrowstyle='->',  # 改为箭头样式
+                color='gray',
+                lw=0.5,
+                alpha=0.7,
+                shrinkA=5,  # 增加 shrinkA 参数
+                shrinkB=5   # 增加 shrinkB 参数
+            )
+        )
+
+        plt.xlim(x_min - x_pad, x_max + x_pad)
+        plt.ylim(y_min - y_pad, y_max + y_pad)
+        plt.title("天龙八部小说语义聚类（完美版）", pad=20)
+        plt.grid(True, linestyle=':', alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+
+if __name__ == "__main__":
+    try:
+        # 更新路径为《天龙八部》的文本路径
+        analyzer = StableJinYongAnalyzer(r"D:\Users\Administrator\Desktop\jyxstxtqj_downcc.com\天龙八部.txt")
+        analyzer.train_model()
+
+        # 验证关键词语
+        test_words = ["段誉", "乔峰", "虚竹", "天山六阳掌", "降龙十八掌", "丐帮", "少林寺"]
+        for word in test_words:
+            if word in analyzer.model.wv:
+                print(f"'{word}' 已收录，向量范数：{np.linalg.norm(analyzer.model.wv[word]):.2f}")
+            else:
+                print(f"警告：'{word}' 未收录")
+
+        # 生成完美可视化
+        analyzer.perfect_visualization(test_words + ["无崖子", "逍遥派", "西夏国"])
+
+    except Exception as e:
+        print(f"程序出错：{str(e)}")
