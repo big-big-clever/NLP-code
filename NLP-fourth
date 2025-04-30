@@ -1,0 +1,265 @@
+#LSTM模型
+
+import numpy as np
+import re
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+def preprocess_text(file_path):
+    # 读取文本文件
+    with open(file_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    # 清理文本 - 移除网站信息和特殊字符
+    text = re.sub(r'本书来自www\.cr173\.com.*?更多更新免费电子书请关注www\.cr173\.com', '', text)
+    text = re.sub(r'[^\u4e00-\u9fa5，。！？、：；“”‘’\n]', '', text)
+    
+    # 分词 - 这里使用简单的按字符分词(中文适合)
+    tokens = list(text)
+    
+    # 创建训练序列
+    seq_length = 100  # 输入序列长度
+    step = 3  # 滑动窗口步长
+    
+    tokenizer = Tokenizer(char_level=True)
+    tokenizer.fit_on_texts(tokens)
+    total_words = len(tokenizer.word_index) + 1
+    
+    # 创建输入序列和对应的目标词
+    input_sequences = []
+    for i in range(0, len(tokens) - seq_length, step):
+        seq = tokens[i:i + seq_length]
+        input_sequences.append(''.join(seq))
+    
+    # 将序列转换为数字表示
+    sequences = tokenizer.texts_to_sequences(input_sequences)
+    sequences = np.array(sequences)
+    
+    # 创建输入(X)和输出(y)
+    X = sequences[:, :-1]
+    y = sequences[:, -1]
+    
+    return X, y, tokenizer, total_words, seq_length
+
+# 使用示例
+file_path = '越女剑.txt'
+X, y, tokenizer, total_words, seq_length = preprocess_text(file_path)
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.utils import to_categorical
+
+def build_lstm_model(total_words, seq_length):
+    model = Sequential([
+        Embedding(total_words, 50, input_length=seq_length-1),
+        LSTM(256, return_sequences=True),
+        Dropout(0.2),
+        LSTM(256),
+        Dense(256, activation='relu'),
+        Dropout(0.2),
+        Dense(total_words, activation='softmax')
+    ])
+    
+    model.compile(loss='sparse_categorical_crossentropy', 
+                 optimizer='adam', 
+                 metrics=['accuracy'])
+    
+    return model
+
+# 准备数据
+X_lstm = X
+y_lstm = y
+
+# 构建模型
+lstm_model = build_lstm_model(total_words, seq_length)
+
+# 训练模型
+checkpoint = ModelCheckpoint(
+    "lstm_weights.h5", 
+    monitor='loss', 
+    verbose=1, 
+    save_best_only=True, 
+    mode='min'
+)
+
+history = lstm_model.fit(
+    X_lstm, y_lstm,
+    batch_size=128,
+    epochs=50,
+    callbacks=[checkpoint]
+)
+
+# 文本生成函数
+def generate_text_lstm(seed_text, model, tokenizer, seq_length, num_gen_words):
+    output_text = seed_text
+    
+    for _ in range(num_gen_words):
+        # 将种子文本转换为序列
+        token_list = tokenizer.texts_to_sequences([seed_text])[0]
+        token_list = pad_sequences([token_list], maxlen=seq_length-1, padding='pre')
+        
+        # 预测下一个词
+        predicted_probs = model.predict(token_list, verbose=0)
+        predicted_index = np.argmax(predicted_probs, axis=-1)[0]
+        
+        # 将索引转换为词
+        output_word = ""
+        for word, index in tokenizer.word_index.items():
+            if index == predicted_index:
+                output_word = word
+                break
+        
+        # 更新种子文本
+        seed_text += output_word
+        output_text += output_word
+        
+        # 只保留最后seq_length个字符作为下一次的输入
+        seed_text = seed_text[-(seq_length-1):]
+    
+    return output_text
+
+# 使用示例
+lstm_model.load_weights("lstm_weights.h5")  # 加载最佳权重
+generated_text = generate_text_lstm("范蠡望着远方的山峦", lstm_model, tokenizer, seq_length, 200)
+print(generated_text)
+#Transformer
+import numpy as np
+import re
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+def preprocess_text(file_path):
+    # 读取文本文件
+    with open(file_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    # 清理文本 - 移除网站信息和特殊字符
+    text = re.sub(r'本书来自www\.cr173\.com.*?更多更新免费电子书请关注www\.cr173\.com', '', text)
+    text = re.sub(r'[^\u4e00-\u9fa5，。！？、：；“”‘’\n]', '', text)
+    
+    # 分词 - 这里使用简单的按字符分词(中文适合)
+    tokens = list(text)
+    
+    # 创建训练序列
+    seq_length = 100  # 输入序列长度
+    step = 3  # 滑动窗口步长
+    
+    tokenizer = Tokenizer(char_level=True)
+    tokenizer.fit_on_texts(tokens)
+    total_words = len(tokenizer.word_index) + 1
+    
+    # 创建输入序列和对应的目标词
+    input_sequences = []
+    for i in range(0, len(tokens) - seq_length, step):
+        seq = tokens[i:i + seq_length]
+        input_sequences.append(''.join(seq))
+    
+    # 将序列转换为数字表示
+    sequences = tokenizer.texts_to_sequences(input_sequences)
+    sequences = np.array(sequences)
+    
+    # 创建输入(X)和输出(y)
+    X = sequences[:, :-1]
+    y = sequences[:, -1]
+    
+    return X, y, tokenizer, total_words, seq_length
+
+# 使用示例
+file_path = '越女剑.txt'
+X, y, tokenizer, total_words, seq_length = preprocess_text(file_path)from transformers import GPT2LMHeadModel, GPT2Tokenizer, Trainer, TrainingArguments
+from torch.utils.data import Dataset
+import torch
+
+# 自定义数据集类
+class YueNuJianDataset(Dataset):
+    def __init__(self, txt_list, tokenizer, max_length):
+        self.input_ids = []
+        self.attn_masks = []
+        
+        for txt in txt_list:
+            encodings_dict = tokenizer(txt, truncation=True, max_length=max_length, padding="max_length")
+            self.input_ids.append(torch.tensor(encodings_dict['input_ids']))
+            self.attn_masks.append(torch.tensor(encodings_dict['attention_mask']))
+    
+    def __len__(self):
+        return len(self.input_ids)
+    
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.attn_masks[idx]
+
+# 准备数据
+def prepare_transformer_data(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    # 清理文本
+    text = re.sub(r'本书来自www\.cr173\.com.*?更多更新免费电子书请关注www\.cr173\.com', '', text)
+    text = re.sub(r'[^\u4e00-\u9fa5，。！？、：；“”‘’\n]', '', text)
+    
+    # 将文本分割成适当长度的块
+    chunk_size = 512  # GPT-2的最大长度
+    text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    
+    return text_chunks
+
+# 加载预训练模型和分词器
+tokenizer = GPT2Tokenizer.from_pretrained('uer/gpt2-chinese-cluecorpussmall')
+model = GPT2LMHeadModel.from_pretrained('uer/gpt2-chinese-cluecorpussmall')
+
+# 添加特殊token（如果需要）
+special_tokens_dict = {'additional_special_tokens': ['<|endoftext|>']}
+tokenizer.add_special_tokens(special_tokens_dict)
+model.resize_token_embeddings(len(tokenizer))
+
+# 准备数据集
+text_chunks = prepare_transformer_data(file_path)
+dataset = YueNuJianDataset(text_chunks, tokenizer, max_length=512)
+
+# 训练参数
+training_args = TrainingArguments(
+    output_dir='./results',
+    num_train_epochs=10,
+    per_device_train_batch_size=2,
+    save_steps=10_000,
+    save_total_limit=2,
+    logging_dir='./logs',
+    logging_steps=500,
+    learning_rate=5e-5,
+    warmup_steps=500,
+    weight_decay=0.01,
+)
+
+# 训练器
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset,
+)
+
+# 开始训练
+trainer.train()
+
+# 保存模型
+model.save_pretrained("./yuenujian_gpt2")
+tokenizer.save_pretrained("./yuenujian_gpt2")
+
+# 文本生成函数
+def generate_text_transformer(seed_text, model, tokenizer, max_length=100):
+    input_ids = tokenizer.encode(seed_text, return_tensors='pt')
+    
+    # 生成文本
+    sample_output = model.generate(
+        input_ids,
+        do_sample=True,
+        max_length=max_length,
+        top_k=50,
+        top_p=0.95,
+        temperature=0.9,
+        num_return_sequences=1
+    )
+    
+    return tokenizer.decode(sample_output[0], skip_special_tokens=True)
+
+# 使用示例
+generated_text = generate_text_transformer("范蠡望着远方的山峦", model, tokenizer, 200)
+print(generated_text)
