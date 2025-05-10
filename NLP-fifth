@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>绿色生活指南 - 可持续生活专家</title>
+    <style>
+        :root {
+            --primary-color: #2e8b57;
+            --secondary-color: #3cb371;
+            --light-color: #f5f5f5;
+            --dark-color: #333;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark-color);
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 0;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        nav {
+            display: flex;
+            justify-content: center;
+            background-color: var(--secondary-color);
+            padding: 0.5rem 0;
+        }
+        
+        nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0 1rem;
+            font-weight: 500;
+        }
+        
+        nav a:hover {
+            text-decoration: underline;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .hero {
+            background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1466637574441-749b8f19452f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+        }
+        
+        .hero-content {
+            max-width: 800px;
+            padding: 2rem;
+        }
+        
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .card-content {
+            padding: 1.5rem;
+        }
+        
+        footer {
+            background-color: var(--dark-color);
+            color: white;
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .card-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .hero {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>绿色生活指南</h1>
+        <p>探索可持续生活的艺术</p>
+    </header>
+    
+    <nav>
+        <a href="#home">首页</a>
+        <a href="#tips">环保技巧</a>
+        <a href="#products">绿色产品</a>
+        <a href="#about">关于我们</a>
+        <a href="#contact">联系我们</a>
+    </nav>
+    
+    <div class="container">
+        <section class="hero" id="home">
+            <div class="hero-content">
+                <h2>为地球做出改变</h2>
+                <p>加入我们的社区，学习如何通过简单的日常选择减少碳足迹，创造更健康的地球未来。</p>
+                <button style="background-color: white; color: var(--primary-color); border: none; padding: 0.8rem 1.5rem; border-radius: 4px; font-weight: bold; margin-top: 1rem; cursor: pointer;">立即加入</button>
+            </div>
+        </section>
+        
+        <h2 style="text-align: center; color: var(--primary-color);">最新环保资讯</h2>
+        
+        <div class="card-container">
+            <div class="card">
+                <img src="https://images.unsplash.com/photo-1526779259212-939e64788e3c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80" alt="零浪费生活">
+                <div class="card-content">
+                    <h3>零浪费生活的5个简单步骤</h3>
+                    <p>了解如何通过微小的改变大幅减少家庭垃圾，从厨房到浴室的全方位指南。</p>
+                    <a href="#" style="color: var(--primary-color); font-weight: bold;">阅读更多 →</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80" alt="可持续时尚">
+                <div class="card-content">
+                    <h3>2023年最佳可持续时尚品牌</h3>
+                    <p>探索那些将环保放在首位的时尚品牌，既时尚又对地球友好的购物选择。</p>
+                    <a href="#" style="color: var(--primary-color); font-weight: bold;">阅读更多 →</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <img src="https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80" alt="城市园艺">
+                <div class="card-content">
+                    <h3>小空间城市园艺指南</h3>
+                    <p>即使住在公寓里，你也可以种植自己的食物。学习阳台和窗台园艺的技巧。</p>
+                    <a href="#" style="color: var(--primary-color); font-weight: bold;">阅读更多 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2023 绿色生活指南 - 所有权利保留</p>
+        <p>致力于推广可持续生活方式</p>
+        <div style="margin-top: 1rem;">
+            <a href="#" style="color: white; margin: 0 0.5rem;">隐私政策</a> | 
+            <a href="#" style="color: white; margin: 0 0.5rem;">使用条款</a>
+        </div>
+    </footer>
+</body>
+</html>
